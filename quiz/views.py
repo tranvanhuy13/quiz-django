@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 
 from rest_framework import status
 
-from quiz.models import Question, Session
+from quiz.models import Question, Session, Result
 
 from utils.quiz import Utils
 class QuizViewSet(ViewSet):
@@ -49,7 +49,11 @@ class QuizViewSet(ViewSet):
                 quiz_id=quiz_id,
                 data={"questions": questions}
             )
-
+            Result.objects.create(
+                quiz_id=quiz_id,
+                score=0,
+                time_taken=0
+            )
             res_question = Utils.remove_answer(questions)
 
             return Response({
@@ -69,14 +73,20 @@ class QuizViewSet(ViewSet):
 
         # Step 2: Get quiz by ID
         try:
-            quiz = Session.objects.get(quiz_id=quiz_id)
+            quiz_session = Session.objects.get(quiz_id=quiz_id)
         except Session.DoesNotExist:
             return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        try:
+            quiz_result = Result.objects.get(quiz_id=quiz_id)
+        except Result.DoesNotExist:
+            return Response({"error": "Result not found"}, status=status.HTTP_404_NOT_FOUND)
+
         # Step 3: Extract current question and answer
-        data = quiz.data
-        current_question = data.get("current_question", 0)  # Use default=0 here safely
-        questions = data.get("questions")
+        session_data = quiz_session.data
+        current_question = session_data.get("current_question", 0)
+        questions = session_data.get("questions")
+        score = quiz_result.score
 
         if not isinstance(questions, list) or current_question >= len(questions):
             return Response({"error": "Invalid or out-of-range question index"}, status=status.HTTP_400_BAD_REQUEST)
@@ -87,6 +97,8 @@ class QuizViewSet(ViewSet):
         # Step 4: Validate answer
         is_correct = selected_option == correct_answer
         Utils.update_current_question(quiz_id)
+        score += 1 if is_correct else 0
+        quiz_result.score = score  # Update score in Result
 
         # Step 5: Prepare response
         response_data = {
@@ -96,8 +108,18 @@ class QuizViewSet(ViewSet):
         }
 
         # Step 6: Update end time if last question
+        start_time = quiz_session.created_at
         if current_question == Utils.get_size(quiz_id) - 1:
-            Utils.update_end_time(quiz_id)
+            Utils.update_end_time(quiz_id)  # Update finished_at in DB
+            quiz_session.refresh_from_db()  # Reload updated finished_at
+
+            end_time = quiz_session.finished_at
+            if not start_time or not end_time:
+                return Response({"error": "Missing start or end time"}, status=status.HTTP_400_BAD_REQUEST)
+
+            quiz_result.time_taken = round(end_time.timestamp() - start_time.timestamp(), 2)
+
+        quiz_result.save()  # Save updates to score and time_taken
 
         # Step 7: Append session log
         Utils.append_session(quiz_id, response_data)
@@ -107,24 +129,15 @@ class QuizViewSet(ViewSet):
 
     @action(detail=False, methods=["get"], url_path=r'(?P<quiz_id>[^/.]+)/result')
     def result(self, request, quiz_id):
-        try:
-            quiz = Session.objects.get(quiz_id=quiz_id)
-        except Session.DoesNotExist:
-            return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        data = quiz.data
-        session_data = data.get("session", [])
-        start_time = data.get("start_time")
-        end_time = data.get("end_time")
 
-        if not start_time or not end_time:
-            return Response({"error": "Missing start or end time"}, status=status.HTTP_400_BAD_REQUEST)
 
-        correct_answer = sum(1 for ans in session_data if ans.get("status"))
+        result_data = Result.objects.get(quiz_id=quiz_id)
+        correct_answer = result_data.score
         total_questions = Utils.get_size(quiz_id)
 
         return Response({
-            "time_seconds": round(end_time.timestamp() - start_time.timestamp(), 2),
+            "time_seconds": result_data.time_taken,
             "correct_answer": correct_answer,
             "incorrect_answers": total_questions - correct_answer,
         }, status=status.HTTP_200_OK)

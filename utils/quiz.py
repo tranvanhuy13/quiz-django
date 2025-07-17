@@ -86,7 +86,16 @@ class Utils:
     def update_end_time(cls, quiz_id):
         quiz_session = cls.get_quiz(quiz_id)
         if quiz_session:
-            quiz_session.data["end_time"] = datetime.utcnow()
+            end_time = datetime.utcnow()
+
+            # Update in JSON data
+            data = quiz_session.data.copy()
+            data["end_time"] = end_time.isoformat()
+            quiz_session.data = data
+
+            # Also update in model field
+            quiz_session.finished_at = end_time
+
             quiz_session.save()
 
     @classmethod

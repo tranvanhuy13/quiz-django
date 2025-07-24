@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -13,7 +13,10 @@ SECRET_KEY = "django-insecure-10(!p*@tbm!s^ud8omt97)=+*yrrbko74yr8*hok9r14ox^b2%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+]
 
 
 # Application definition
@@ -30,11 +33,17 @@ DJANGO_APPS = [
 
 PROJECT_APPS = [
     "quiz",
+    'app_auth',
 ]
 
-INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS
+CORS_APPS= [
+    'corsheaders',
+]
+
+INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS + CORS_APPS
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -43,8 +52,16 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
+
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
+
 
 ROOT_URLCONF = "mysite.urls"
+
 
 TEMPLATES = [
     {
@@ -81,7 +98,16 @@ DATABASES = {
     }
 }
 
-
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',  # for browser sessions
+        'rest_framework.authentication.BasicAuthentication',    # optional
+        'rest_framework.authentication.TokenAuthentication',    # for token-based login
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

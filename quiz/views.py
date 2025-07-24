@@ -11,8 +11,6 @@ from quiz.models import Question, Session, Result
 from utils.quiz import Utils
 class QuizViewSet(ViewSet):
 
-
-
     def retrieve(self, request, pk=None):
         try:
             q = Question.objects.get(id=pk)
@@ -40,10 +38,8 @@ class QuizViewSet(ViewSet):
     def get_questions(self, request):
         try:
             quiz = Utils.prepare_quiz(5)
-
             quiz_id = str(quiz.get("quiz_id"))
             questions = quiz.get("data").get("questions")
-            quiz_id = 1
             # Store in DB
             Session.objects.create(
                 quiz_id=quiz_id,
@@ -55,7 +51,6 @@ class QuizViewSet(ViewSet):
                 time_taken=0
             )
             res_question = Utils.remove_answer(questions)
-
             return Response({
                 "quiz_id": quiz_id,
                 "questions": res_question
@@ -129,9 +124,6 @@ class QuizViewSet(ViewSet):
 
     @action(detail=False, methods=["get"], url_path=r'(?P<quiz_id>[^/.]+)/result')
     def result(self, request, quiz_id):
-
-
-
         result_data = Result.objects.get(quiz_id=quiz_id)
         correct_answer = result_data.score
         total_questions = Utils.get_size(quiz_id)

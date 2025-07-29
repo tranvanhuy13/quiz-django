@@ -56,6 +56,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+]
+
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
@@ -101,8 +105,8 @@ DATABASES = {
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',  # for browser sessions
-        'rest_framework.authentication.BasicAuthentication',    # optional
-        'rest_framework.authentication.TokenAuthentication',    # for token-based login
+        # 'rest_framework.authentication.BasicAuthentication',    # optional
+        # 'rest_framework.authentication.TokenAuthentication',    # for token-based login
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

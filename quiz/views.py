@@ -133,3 +133,16 @@ class QuizViewSet(ViewSet):
             "correct_answer": correct_answer,
             "incorrect_answers": total_questions - correct_answer,
         }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path="ranking")
+    def ranking(self, request):
+        results = Result.objects.all().order_by('-score', 'time_taken')[:10]
+        ranking_data = [
+            {
+                "quiz_id": result.quiz_id,
+                "score": result.score,
+                "time_taken": result.time_taken
+            }
+            for result in results
+        ]
+        return Response(ranking_data, status=status.HTTP_200_OK)

@@ -66,4 +66,4 @@ class UserAuthViewSet(ViewSet):
         logout(request)
         return Response(
             {"message": "Logged out successfully"}, status=status.HTTP_200_OK
-        )
+        )   

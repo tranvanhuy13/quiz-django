@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework import status
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.utils import timezone
 from .models import UserProfile  # optional
 
@@ -20,9 +20,15 @@ class UserAuthViewSet(ViewSet):
         data = request.data
         username = data.get("username")
         password = data.get("password")
+        role = data.get("role", "Student")  # Default role is Student
         if not username or not password:
             return Response(
                 {"detail": "Username and password required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if role not in ["Teacher", "Student"]:
+            return Response(
+                {"detail": "Invalid role"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if User.objects.filter(username=username).exists():
@@ -30,8 +36,15 @@ class UserAuthViewSet(ViewSet):
                 {"detail": "Username already exists"}, status=status.HTTP_409_CONFLICT
             )
         user = User.objects.create_user(username=username, password=password)
+
+        group, _ = Group.objects.get_or_create(name=role)
+        user.groups.add(group)
+
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        profile.role = role
+        profile.save()
+
         login(request, user)
-        UserProfile.objects.get_or_create(user=user)
         return Response(
             {"message": "Registered successfully"}, status=status.HTTP_201_CREATED
         )
@@ -66,4 +79,4 @@ class UserAuthViewSet(ViewSet):
         logout(request)
         return Response(
             {"message": "Logged out successfully"}, status=status.HTTP_200_OK
-        )   
+        )

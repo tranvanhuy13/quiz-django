@@ -1,29 +1,28 @@
 import json
 
+
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from rest_framework.decorators import action
-
 from rest_framework import status
-
 from quiz.models import Question, Session, Result
-
 from utils.quiz import Utils
+from app_auth.permissions import IsTeacher, IsStudent
+
+
 class QuizViewSet(ViewSet):
+    permission_classes = [IsTeacher | IsStudent]
 
     def retrieve(self, request, pk=None):
         try:
             q = Question.objects.get(id=pk)
-            return Response(
-                q.to_dict(), status=status.HTTP_200_OK
-            )
+            return Response(q.to_dict(), status=status.HTTP_200_OK)
         except Question.DoesNotExist:
             return Response(
-                {"error": "Question not found"},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "Question not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-    @action(detail=False, methods=["post"], url_path="create-question")
+    @action(detail=False, methods=["post"], url_path="create-question", permission_classes=[IsTeacher])
     def create_questions(self, request):
         data = request.data
         content = data.get("content")
@@ -34,48 +33,47 @@ class QuizViewSet(ViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=False, methods=["get"], url_path="get-questions")
+    @action(detail=False, methods=["get"], url_path="get-questions", permission_classes=[IsStudent])
     def get_questions(self, request):
         try:
             quiz = Utils.prepare_quiz(5)
             quiz_id = str(quiz.get("quiz_id"))
             questions = quiz.get("data").get("questions")
             # Store in DB
-            Session.objects.create(
-                quiz_id=quiz_id,
-                data={"questions": questions}
-            )
-            Result.objects.create(
-                quiz_id=quiz_id,
-                score=0,
-                time_taken=0
-            )
+            Session.objects.create(quiz_id=quiz_id, data={"questions": questions})
+            Result.objects.create(quiz_id=quiz_id, score=0, time_taken=0)
             res_question = Utils.remove_answer(questions)
-            return Response({
-                "quiz_id": quiz_id,
-                "questions": res_question
-            })
+            return Response({"quiz_id": quiz_id, "questions": res_question})
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=["post"], url_path=r'(?P<quiz_id>[^/.]+)/validate-question')
+    @action(detail=False, methods=["post"], url_path=r"(?P<quiz_id>[^/.]+)/validate-question", permission_classes=[IsStudent])
     def validate_question(self, request, quiz_id):
         # Step 1: Parse selected_option
         selected_option = request.data.get("selected_option")
         if selected_option is None:
-            return Response({"error": "No selected option provided."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No selected option provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Step 2: Get quiz by ID
         try:
             quiz_session = Session.objects.get(quiz_id=quiz_id)
         except Session.DoesNotExist:
-            return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         try:
             quiz_result = Result.objects.get(quiz_id=quiz_id)
         except Result.DoesNotExist:
-            return Response({"error": "Result not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Result not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Step 3: Extract current question and answer
         session_data = quiz_session.data
@@ -84,7 +82,10 @@ class QuizViewSet(ViewSet):
         score = quiz_result.score
 
         if not isinstance(questions, list) or current_question >= len(questions):
-            return Response({"error": "Invalid or out-of-range question index"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid or out-of-range question index"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         correct_answer = str(questions[current_question].get("answer"))
         selected_option = str(selected_option)
@@ -99,7 +100,7 @@ class QuizViewSet(ViewSet):
         response_data = {
             "correct_answer": correct_answer,
             "status": is_correct,
-            "feedback": Utils.get_feedback(is_correct)
+            "feedback": Utils.get_feedback(is_correct),
         }
 
         # Step 6: Update end time if last question
@@ -110,9 +111,14 @@ class QuizViewSet(ViewSet):
 
             end_time = quiz_session.finished_at
             if not start_time or not end_time:
-                return Response({"error": "Missing start or end time"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Missing start or end time"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-            quiz_result.time_taken = round(end_time.timestamp() - start_time.timestamp(), 2)
+            quiz_result.time_taken = round(
+                end_time.timestamp() - start_time.timestamp(), 2
+            )
 
         quiz_result.save()  # Save updates to score and time_taken
 
@@ -122,26 +128,29 @@ class QuizViewSet(ViewSet):
         # Step 8: Return response
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["get"], url_path=r'(?P<quiz_id>[^/.]+)/result')
+    @action(detail=False, methods=["get"], url_path=r"(?P<quiz_id>[^/.]+)/result", permission_classes=[IsStudent])
     def result(self, request, quiz_id):
         result_data = Result.objects.get(quiz_id=quiz_id)
         correct_answer = result_data.score
         total_questions = Utils.get_size(quiz_id)
 
-        return Response({
-            "time_seconds": result_data.time_taken,
-            "correct_answer": correct_answer,
-            "incorrect_answers": total_questions - correct_answer,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "time_seconds": result_data.time_taken,
+                "correct_answer": correct_answer,
+                "incorrect_answers": total_questions - correct_answer,
+            },
+            status=status.HTTP_200_OK,
+        )
 
-    @action(detail=False, methods=["get"], url_path="ranking")
+    @action(detail=False, methods=["get"], url_path="ranking", permission_classes=[IsStudent|IsTeacher])
     def ranking(self, request):
-        results = Result.objects.all().order_by('-score', 'time_taken')[:10]
+        results = Result.objects.all().order_by("-score", "time_taken")[:10]
         ranking_data = [
             {
                 "quiz_id": result.quiz_id,
                 "score": result.score,
-                "time_taken": result.time_taken
+                "time_taken": result.time_taken,
             }
             for result in results
         ]
